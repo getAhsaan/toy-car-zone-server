@@ -1,9 +1,9 @@
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const app = express();
-const port = process.env.PORT || 5000;
+const port = process.env.PORT || 3500;
 
 // middleware
 app.use(cors());
@@ -26,8 +26,105 @@ async function run() {
     // Connect the client to the server	(optional starting in v4.7)
     // await client.connect();
 
-    app.get("/toy", (req, res) => {
-      res.send("Toy Car Zone from MongoDB");
+    const toyCarsCollection = client.db("carZoneDB").collection("toyCars");
+
+    // get all cars
+    app.get("/cars", async (req, res) => {
+      const result = await toyCarsCollection.find().limit(20).toArray();
+      res.send(result);
+    });
+
+    // get cars by category
+    app.get("/categories/:cat", async (req, res) => {
+      const targetCategory = req.params.cat.split("-").join(" ");
+      const result = await toyCarsCollection
+        .find({ subcategory: targetCategory })
+        .toArray();
+      res.send(result);
+    });
+
+    // get a single car for details
+    app.get("/cars/:id", async (req, res) => {
+      const result = await toyCarsCollection.findOne({
+        _id: new ObjectId(req.params.id),
+      });
+      res.send(result);
+    });
+
+    // get all toy car for a single user by email
+    app.get("/my-toys", async (req, res) => {
+      const result = await toyCarsCollection
+        .find({ sellerEmail: req.query.email })
+        .toArray();
+      res.send(result);
+    });
+
+    // search
+    const result = await toyCarsCollection.createIndex(
+      { name: 1 },
+      { name: "toyCarsName" }
+    );
+
+    app.get("/search/:text", async (req, res) => {
+      const result = await toyCarsCollection
+        .find({ name: { $regex: req.params.text, $options: "i" } })
+        .toArray();
+      res.send(result);
+    });
+
+    // sort by price
+    app.get("/sort-car/:text", async (req, res) => {
+      let sortTo;
+      if (req.params.text === "low") {
+        sortTo = 1;
+      } else {
+        sortTo = -1;
+      }
+      const result = await toyCarsCollection
+        .find({sellerEmail: req.query.email})
+        .sort({ price: sortTo })
+        .toArray();
+      res.send(result);
+    });
+
+    // load gallery image
+    app.get("/gallery-images", async (req, res) => {
+      const result = await toyCarsCollection
+        .find({}, { projection: { pictureUrl: 1 } })
+        .limit(6)
+        .toArray();
+      res.send(result);
+    });
+
+    // post a toy car
+    app.post("/cars", async (req, res) => {
+      const body = req.body;
+      const result = await toyCarsCollection.insertOne(body);
+      res.send(result);
+    });
+
+    // update a car information
+    app.patch("/cars/:id", async (req, res) => {
+      const updateDoc = {
+        $set: {
+          price: req.body.price,
+          quantity: req.body.quantity,
+          description: req.body.description,
+        },
+      };
+      const result = await toyCarsCollection.updateOne(
+        { _id: new ObjectId(req.params.id) },
+        updateDoc
+      );
+      res.send(result);
+    });
+
+    // delete a toy
+    app.delete("/cars/:id", async (req, res) => {
+      const result = await toyCarsCollection.deleteOne({
+        _id: new ObjectId(req.params.id),
+      });
+      res.send(result);
     });
 
     // Send a ping to confirm a successful connection
